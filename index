@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>地図記号マッチングゲーム</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 10px;
+      touch-action: none;
+      background-color: #f0f4f8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      max-width: 800px;
+      width: 100%;
+    }
+
+    /* 地図エリア */
+    #map-container {
+      position: relative;
+      width: 100%;
+      height: 400px;
+      background-color: #e2f0d9;
+      /* 自作地図画像を使う場合は下のコメントアウトを解除 */
+      /* background-image: url('map.png'); */
+      background-size: cover;
+      background-position: center;
+      border: 3px solid #333;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    /* ドロップ判定エリア（正解の位置） */
+    .drop-zone {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      border: 2px dashed #666;
+      border-radius: 8px;
+      background-color: rgba(255, 255, 255, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      color: #555;
+    }
+
+    /* 地図上の配置位置（例） */
+    #zone-koban { top: 50px; left: 60px; }
+    #zone-school { top: 200px; left: 250px; }
+
+    /* 記号選択エリア */
+    #symbol-palette {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      padding: 15px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    /* ドラッグする地図記号 */
+    .symbol {
+      width: 60px;
+      height: 60px;
+      background: #ffffff;
+      border: 2px solid #007bff;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      font-weight: bold;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+      z-index: 100;
+    }
+
+    /* 判定アニメーションの表示 */
+    .feedback {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 100px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 1000;
+    }
+    .show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <h2>地図記号マッチング</h2>
+  <p>下の記号を、地図の正しい枠まで指で運んでね！</p>
+
+  <div id="app-container">
+    <!-- 地図画面 -->
+    <div id="map-container">
+      <div id="feedback" class="feedback"></div>
+      
+      <!-- ドロップ目標（data-targetに正解のIDを設定） -->
+      <div id="zone-koban" class="drop-zone" data-target="koban">交番</div>
+      <div id="zone-school" class="drop-zone" data-target="school">学校</div>
+    </div>
+
+    <!-- 記号置き場 -->
+    <div id="symbol-palette">
+      <div id="sym-koban" class="symbol" data-type="koban">Ⓚ</div>
+      <div id="sym-school" class="symbol" data-type="school">文</div>
+    </div>
+  </div>
+
+  <script>
+    const symbols = document.querySelectorAll('.symbol');
+    const dropZones = document.querySelectorAll('.drop-zone');
+    const feedback = document.getElementById('feedback');
+
+    symbols.forEach(symbol => {
+      let initialX = 0, initialY = 0;
+      let currentX = 0, currentY = 0;
+
+      // タッチ開始
+      symbol.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        initialX = touch.clientX - currentX;
+        initialY = touch.clientY - currentY;
+      });
+
+      // タッチ移動
+      symbol.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        currentX = touch.clientX - initialX;
+        currentY = touch.clientY - initialY;
+        symbol.style.transform = `translate(${currentX}px, ${currentY}px)`;
+      });
+
+      // タッチ終了（判定）
+      symbol.addEventListener('touchend', (e) => {
+        const rect = symbol.getBoundingClientRect();
+        const symbolCenter = {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        };
+
+        let dropped = false;
+
+        dropZones.forEach(zone => {
+          const zoneRect = zone.getBoundingClientRect();
+
+          if (
+            symbolCenter.x >= zoneRect.left &&
+            symbolCenter.x <= zoneRect.right &&
+            symbolCenter.y >= zoneRect.top &&
+            symbolCenter.y <= zoneRect.bottom
+          ) {
+            dropped = true;
+            const symbolType = symbol.getAttribute('data-type');
+            const targetType = zone.getAttribute('data-target');
+
+            if (symbolType === targetType) {
+              showFeedback('⭕️');
+              symbol.style.transform = 'translate(0, 0)';
+              zone.appendChild(symbol);
+              symbol.style.position = 'static';
+            } else {
+              showFeedback('❌');
+              resetPosition(symbol);
+            }
+          }
+        });
+
+        if (!dropped) {
+          resetPosition(symbol);
+        }
+      });
+
+      function resetPosition(elem) {
+        currentX = 0;
+        currentY = 0;
+        elem.style.transform = 'translate(0px, 0px)';
+      }
+    });
+
+    function showFeedback(mark) {
+      feedback.textContent = mark;
+      feedback.classList.add('show');
+      setTimeout(() => {
+        feedback.classList.remove('show');
+      }, 800);
+    }
+  </script>
+</body>
+</html>
